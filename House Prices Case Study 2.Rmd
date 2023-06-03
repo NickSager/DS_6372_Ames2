@@ -168,9 +168,119 @@ ames$log_gr_liv_area <- log(ames$gr_liv_area)
 ## Exploratory Data Analysis
 Next, we will start exploring the data for insights into the Ames housing market. This analysis will serve as a foundation for our model building efforts.
 
+Summary Statistics:
+```{r}
+# Summary statistics for all numeric variables
+calculate_range <- function(x) {
+    return(max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
+}
+ames_non_dummy <- ames[sapply(ames, calculate_range) != 1]
+summary(ames_non_dummy)
 
+ames_long <- ames_non_dummy %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "value")
+ames_long %>% ggplot(aes(x = variable, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free") +
+  theme(axis.text.x = element_blank()) +
+  labs(title = "Boxplots for each variable", x = "Variables", y = "Values")
+```
 
+```{r}
+# Summary statistics for all categorical variables
+ames_categorical <- ames[sapply(ames, calculate_range) == 1]
+ames_categorical %>%
+  summarise_all(mean) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = variable, y = value)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  labs(title = "Barplot of categorical variables", x = "Variables", y = "Proportion") +
+  coord_flip()
+# Fix or exclude the plot.
 
+ames_categorical %>%
+  summarise_all(mean) %>%
+  kable()
+```
+
+```{r}
+# GGally plot of selected numeric variables
+library(GGally)
+
+lowerFn <- function(data, mapping, method = "lm", ...) {
+  p <- ggplot(data = data, mapping = mapping) +
+    geom_point(colour = "blue", size = .2) +
+    geom_smooth(method = loess, color = "red", ...)
+  p
+}
+
+# ames_non_dummy %>%
+#   ggpairs(lower=list(continuous=lowerFn))
+
+ames_non_dummy %>%
+  select(sale_price, gr_liv_area, lot_area, overall_qual, overall_cond, year_built, year_remod_add, total_bsmt_sf, garage_area) %>%
+  ggpairs(lower=list(continuous=lowerFn))
+```
+
+```{r}
+# Fit a linear model with categorical variables to guage importance
+cbind(ames$sale_price, ames_categorical) %>% #str()
+  lm(ames$sale_price ~ ., data = .) %>%
+  summary()
+```
+Here we can see that all of the neighborhood variables are significant, suggesting that neighborhood is an important factor in determining sale price. Several other categorical values look important including: lot_config_fr2, house_style1story, exter_qual_gd, fireplace_qu_none, and sale_type_con.
+
+Looking more closely at the data:
+
+```{r}
+# Plot Sale Price vs. Gross Living Area colored by neighborhood, omitting rows where SalePrice is NA
+# Convert the dataframe from wide format to long format
+ames_long <- ames %>% 
+  pivot_longer(
+    cols = starts_with("neighborhood_"),
+    names_to = "Neighborhood",
+    values_to = "value"
+  ) %>%
+  filter(value == 1) %>%  # Keep only rows where the neighborhood dummy variable is 1
+  select(-value)  # Remove the 'value' column as it's no longer needed
+
+ames_long %>%
+  filter(!is.na(sale_price)) %>%
+  ggplot(aes(x = gr_liv_area, y = sale_price, color = Neighborhood)) +
+  geom_point() +
+  theme_gdocs() +
+  labs(title = "Sale Price vs. Gross Living Area by Neighborhood", x = "Gross Living Area", y = "Sale Price")
+```
+There is clearly a relationship between Sale Price and Gross Living Area, and the neighborhoods appear to have a similar but separate relationships. This confirms the significance of Neighborhood that we saw in the linear model above.
+
+We will now look at log transformations of the data to see if there is more linear relationship.
+```{r}
+# Untransformed variables
+ames %>%
+  ggplot(aes(x = gr_liv_area, y = sale_price)) +
+  geom_point() +
+  geom_smooth() +
+  theme_gdocs() +
+  labs(
+    title = "Log(Sale Price) vs. Log(Gross Living Area) by Neighborhood",
+    x = "Gross Living Area",
+    y = "Sale Price"
+  )
+
+# Log Transformed
+ames %>%
+  ggplot(aes(x = log_gr_liv_area, y = log_sale_price)) +
+  geom_point() +
+  geom_smooth() +
+  theme_gdocs() +
+  labs(
+    title = "Log(Sale Price) vs. Log(Gross Living Area) by Neighborhood",
+    x = "Log(Gross Living Area)",
+    y = "Log(Sale Price)"
+  )
+```
+The log transformed sale price and square footage appear to have a more linear relationship. Using these will result in a more accurate regression model at the expense of interpretability.
 
 
 ## Objective 1: Interpretable Regression Model
@@ -235,16 +345,7 @@ Restate the problem here
 ### Build and fit the model
 
 #### Entire Dataset
-```{r}
-# Plot Sale Price vs. Gross Living Area colored by neighborhood, omitting rows where SalePrice is NA
-ames %>%
-  filter(!is.na(SalePrice)) %>%
-  ggplot(aes(x = GrLivArea, y = SalePrice, color = Neighborhood)) +
-  geom_point() +
-  theme_gdocs() +
-  labs(title = "Sale Price vs. Gross Living Area by Neighborhood", x = "Gross Living Area", y = "Sale Price")
-```
-There is clearly a relationship between Sale Price and Gross Living Area, and the neighborhoods appear to have a similar relationship. We will now look at log transformations of the data to see if there is more linear relationship.
+
 ```{r}
 # Plot log(Sale Price) vs. log(Gross Living Area) colored by neighborhood, omitting rows where SalePrice is NA
 ames %>%
