@@ -51,15 +51,9 @@ summary(ames)
 For data cleaning purposes, we will merge test and train into one dataset, keeping in mind that the 1459 NA's in the SalePrice column are from the test set. We will also add a column to indicate whether the row is from the train or test set.
 
 ### Data Cleaning
+In order to use a linear regression model, we need to convert all of the categorical variables into dummy variables. We will also remove or impute the NA's in the data set. Please see the appendix for details on this process.
 
-```{r}
-
-```
-
-## Exploratory Data Analysis
-Next, we will start exploring the data for insights into the Ames housing market as well as what variables we need to change, clean, or create.
-
-First, we will visualize where the NA values are and whether it will affect the first to parameters we are concerned about: Sale Price and Gross Living Area.
+First, we will visualize where the NA values are and whether it will affect the first two parameters we are concerned about: Sale Price and Gross Living Area.
 ```{r}
 # Summarize NA's by  column
 ames %>%
@@ -80,7 +74,104 @@ ames %>%
   arrange(desc(NA_Count)) %>%
   kable()
 ```
-There are not too many NA's in the data set, and they appear mostly to do with lack of a certain feature. For example, if a house does not have a pool, then the PoolQC column will be NA. We will need to decide how to handle these NA's, but for now we will leave them as is and continue with the analysis of Sale Price and Gross Living Area.
+There are not too many NA's in the data set, and they appear mostly to do with lack of a certain feature. For example, if a house does not have a pool, then the PoolQC column will be NA.
+
+```{r}
+# Data Cleaning
+
+# If pool-related variables are NA, assume there is no pool and assign to 0
+ames <- ames %>%
+  mutate(
+    PoolQC = ifelse(is.na(PoolQC), "None", PoolQC),
+    PoolArea = ifelse(is.na(PoolArea), 0, PoolArea),
+  )
+# If garage-related variables are NA, assume there is no garage and assign to 0
+ames <- ames %>%
+  mutate(
+    GarageType = ifelse(is.na(GarageType), "None", GarageType),
+    #GarageYrBlt = ifelse(is.na(GarageYrBlt), 0, GarageYrBlt), #These will be changed to the mean because of large year values
+    GarageFinish = ifelse(is.na(GarageFinish), "None", GarageFinish),
+    GarageCars = ifelse(is.na(GarageCars), 0, GarageCars),
+    GarageArea = ifelse(is.na(GarageArea), 0, GarageArea),
+    GarageQual = ifelse(is.na(GarageQual), "None", GarageQual),
+    GarageCond = ifelse(is.na(GarageCond), "None", GarageCond)
+  )
+# If Bsmt-related variables are NA, assume there is no Bsmt and assign to 0
+ames <- ames %>%
+  mutate(
+    BsmtQual = ifelse(is.na(BsmtQual), "None", BsmtQual),
+    BsmtCond = ifelse(is.na(BsmtCond), "None", BsmtCond),
+    BsmtExposure = ifelse(is.na(BsmtExposure), "None", BsmtExposure),
+    BsmtFinType1 = ifelse(is.na(BsmtFinType1), "None", BsmtFinType1),
+    BsmtFinSF1 = ifelse(is.na(BsmtFinSF1), 0, BsmtFinSF1),
+    BsmtFinType2 = ifelse(is.na(BsmtFinType2), "None", BsmtFinType2),
+    BsmtFinSF2 = ifelse(is.na(BsmtFinSF2), 0, BsmtFinSF2),
+    BsmtUnfSF = ifelse(is.na(BsmtUnfSF), 0, BsmtUnfSF),
+    TotalBsmtSF = ifelse(is.na(TotalBsmtSF), 0, TotalBsmtSF)
+  )
+# If Fence-related variables are NA, assume there is no Fence and assign to 0
+ames <- ames %>%
+  mutate(
+    Fence = ifelse(is.na(Fence), "None", Fence), 
+  )
+# If Misc-related variables are NA, assume there is no Misc features and assign to 0
+ames <- ames %>%
+  mutate(
+    MiscFeature = ifelse(is.na(MiscFeature), "None", MiscFeature), 
+  )
+# If Fireplace-related variables are NA, assume there is no Fireplace and assign to 0
+ames <- ames %>%
+  mutate(
+    FireplaceQu = ifelse(is.na(FireplaceQu), "None", FireplaceQu),
+  )
+# If Alley-related variables are NA, assume there is no Alley and assign to 0
+ames <- ames %>%
+  mutate(
+    Alley = ifelse(is.na(Alley), "None", Alley),
+  )
+
+# Summarize the amount of remaining NA's by column to check what's left
+colSums(is.na(ames))
+
+# Use the dummyVars() function to convert categorical variables into dummy variables
+# Then use janitor::clean_names() to clean up the column names
+dummy_model <- dummyVars(~ ., data = ames)
+ames_dummy <- as.data.frame(predict(dummy_model, newdata = ames))
+ames_dummy <- clean_names(ames_dummy)
+
+# NOTE: Probably could make the case for deleting NAs here -Nick
+# Fill in all remaining na values with the mean of the column
+ames_dummy <- ames_dummy %>%
+  mutate(across(
+    c(-sale_price, -train),
+    ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)
+  ))
+# Summarize the amount of remaining NA's by column
+colSums(is.na(ames_dummy))
+
+# Assign ames_dummy to ames for the rest of the analysis
+ames <- ames_dummy
+
+# Split the data into training and testing sets
+# train <- ames_dummy[ames_dummy$train == 1, ]
+# test <- ames_dummy[ames_dummy$train == 0, ] # For Kaggle only. Will split train into train/test for model building.
+```
+We can write as much or as little about this as we'd like. Basically, we tried to interpret what the NA's actually were saying and then make a more informed guess as to what the were rather than going with the mean. In most cases, this created a new category of "none". Remaining values were imputed to the mean, and the data was split into training and testing sets.
+
+Transformations:
+```{r}
+# Create columns for log(SalePrice) and log(GrLivArea)
+ames$log_sale_price <- log(ames$sale_price)
+ames$log_gr_liv_area <- log(ames$gr_liv_area)
+```
+
+## Exploratory Data Analysis
+Next, we will start exploring the data for insights into the Ames housing market. This analysis will serve as a foundation for our model building efforts.
+
+
+
+
+
 
 ## Objective 1: Interpretable Regression Model
 
@@ -120,6 +211,11 @@ Summary of objective 1
 Summary and recommendations objective 2
 
 Additional discussion points:  Scope of inference?  What would you do if given more time? Recommendations moving forward? Insight the model gave? Etc.  
+
+
+
+
+
 
 
 
@@ -314,84 +410,7 @@ Either embed the app here or link to it
 Restate the problem
 
 ### Data Cleaning
-In order to use a linear regression model, we need to convert all of the categorical variables into dummy variables. We will also remove or impute the NA's in the data set. Please see the appendix for details on this process.
-```{r}
-# Data Cleaning
 
-# If pool-related variables are NA, assume there is no pool and assign to 0
-ames <- ames %>%
-  mutate(
-    PoolQC = ifelse(is.na(PoolQC), "None", PoolQC),
-    PoolArea = ifelse(is.na(PoolArea), 0, PoolArea),
-  )
-# If garage-related variables are NA, assume there is no garage and assign to 0
-ames <- ames %>%
-  mutate(
-    GarageType = ifelse(is.na(GarageType), "None", GarageType),
-    #GarageYrBlt = ifelse(is.na(GarageYrBlt), 0, GarageYrBlt), #These will be changed to the mean because of large year values
-    GarageFinish = ifelse(is.na(GarageFinish), "None", GarageFinish),
-    GarageCars = ifelse(is.na(GarageCars), 0, GarageCars),
-    GarageArea = ifelse(is.na(GarageArea), 0, GarageArea),
-    GarageQual = ifelse(is.na(GarageQual), "None", GarageQual),
-    GarageCond = ifelse(is.na(GarageCond), "None", GarageCond)
-  )
-# If Bsmt-related variables are NA, assume there is no Bsmt and assign to 0
-ames <- ames %>%
-  mutate(
-    BsmtQual = ifelse(is.na(BsmtQual), "None", BsmtQual),
-    BsmtCond = ifelse(is.na(BsmtCond), "None", BsmtCond),
-    BsmtExposure = ifelse(is.na(BsmtExposure), "None", BsmtExposure),
-    BsmtFinType1 = ifelse(is.na(BsmtFinType1), "None", BsmtFinType1),
-    BsmtFinSF1 = ifelse(is.na(BsmtFinSF1), 0, BsmtFinSF1),
-    BsmtFinType2 = ifelse(is.na(BsmtFinType2), "None", BsmtFinType2),
-    BsmtFinSF2 = ifelse(is.na(BsmtFinSF2), 0, BsmtFinSF2),
-    BsmtUnfSF = ifelse(is.na(BsmtUnfSF), 0, BsmtUnfSF),
-    TotalBsmtSF = ifelse(is.na(TotalBsmtSF), 0, TotalBsmtSF)
-  )
-# If Fence-related variables are NA, assume there is no Fence and assign to 0
-ames <- ames %>%
-  mutate(
-    Fence = ifelse(is.na(Fence), "None", Fence), 
-  )
-# If Misc-related variables are NA, assume there is no Misc features and assign to 0
-ames <- ames %>%
-  mutate(
-    MiscFeature = ifelse(is.na(MiscFeature), "None", MiscFeature), 
-  )
-# If Fireplace-related variables are NA, assume there is no Fireplace and assign to 0
-ames <- ames %>%
-  mutate(
-    FireplaceQu = ifelse(is.na(FireplaceQu), "None", FireplaceQu),
-  )
-# If Alley-related variables are NA, assume there is no Alley and assign to 0
-ames <- ames %>%
-  mutate(
-    Alley = ifelse(is.na(Alley), "None", Alley),
-  )
-
-# Summarize the amount of remaining NA's by column to check what's left
-colSums(is.na(ames))
-
-# Use the dummyVars() function to convert categorical variables into dummy variables
-# Then use janitor::clean_names() to clean up the column names
-dummy_model <- dummyVars(~ ., data = ames)
-ames_dummy <- as.data.frame(predict(dummy_model, newdata = ames))
-ames_dummy <- clean_names(ames_dummy)
-
-# Fill in all remaining na values with the mean of the column
-ames_dummy <- ames_dummy %>%
-  mutate(across(
-    c(-sale_price, -log_sale_price),
-    ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)
-  ))
-# Summarize the amount of remaining NA's by column
-colSums(is.na(ames_dummy))
-
-# Split the data into training and testing sets
-train <- ames_dummy[ames_dummy$train == 1, ]
-test <- ames_dummy[ames_dummy$train == 0, ]
-```
-We can write as much or as little about this as we'd like. Basically, we tried to interpret what the NA's actually were saying and then make a more informed guess as to what the were rather than going with the mean. In most cases, this created a new category of "none". Remaining values were imputed to the mean, and the data was split into training and testing sets.
 
 
 ### Model Selection
