@@ -204,6 +204,7 @@ ames_categorical %>%
   kable()
 ```
 
+Next we will plot the a pairs matrix of selected continuous variables to see if there are obvious trends.
 ```{r}
 # GGally plot of selected numeric variables
 library(GGally)
@@ -219,12 +220,18 @@ lowerFn <- function(data, mapping, method = "lm", ...) {
 #   ggpairs(lower=list(continuous=lowerFn))
 
 ames_non_dummy %>%
-  select(sale_price, gr_liv_area, lot_area, overall_qual, overall_cond, year_built, year_remod_add, total_bsmt_sf, garage_area) %>%
+  select(log_sale_price, gr_liv_area, lot_area, overall_qual, overall_cond,
+  year_built, year_remod_add, total_bsmt_sf, garage_area, bedroom_abv_gr, x1st_flr_sf) %>%
   ggpairs(lower=list(continuous=lowerFn))
 ```
+The first relationship that stands out is the one between Gross Living Area and sale price. There is a strong linear relationship here (Corr: 0.70) which may become even stronger with a log transformation. We will consider transformations later on. Lot area also appears to be linearly related to sale price, although with a much lower slope. Overall quality has a strong relationship with sale price as well. This will be another candidate for transformation as the relationship appears quadratic. Surprisingly overall condition does not show a linear relationship with sale price, but the vast majority of overall condition ratings are '5'.
+```{r} summary(as.factor(ames$overall_cond))
+```
+With scores of '5' removed, this variable may provide useful information about sale price, as there appears to be a linear relationship between price and non-'5' scores. Year Built and Year Remodelled show a relationship with sale price. It is linear at lower values of sale price, but appears quadratic across the whole range. These variables may also be candidates for transformation. Basement area and garage area appear weakly related to price, but contain enough information to include, possibly with transformation. First and second floor area also appear to be related to price. They may be candidates for transformation as well and do show some multicollinearity with Gross Living Area. If these are included, we will have consider whether variance inflation becomes a problem.
+
 
 ```{r}
-# Fit a linear model with categorical variables to guage importance
+# Fit a linear model with categorical variables to gauge importance
 cbind(ames$sale_price, ames_categorical) %>% #str()
   lm(ames$sale_price ~ ., data = .) %>%
   summary()
@@ -248,7 +255,7 @@ ames_long <- ames %>%
 ames_long %>%
   filter(!is.na(sale_price)) %>%
   ggplot(aes(x = gr_liv_area, y = sale_price, color = Neighborhood)) +
-  geom_point() +
+  geom_point(show.legend = FALSE) +
   theme_gdocs() +
   labs(title = "Sale Price vs. Gross Living Area by Neighborhood", x = "Gross Living Area", y = "Sale Price")
 ```
@@ -263,7 +270,7 @@ ames %>%
   geom_smooth() +
   theme_gdocs() +
   labs(
-    title = "Log(Sale Price) vs. Log(Gross Living Area) by Neighborhood",
+    title = "Sale Price vs. Gross Living Area by Neighborhood",
     x = "Gross Living Area",
     y = "Sale Price"
   )
@@ -285,12 +292,53 @@ The log transformed sale price and square footage appear to have a more linear r
 
 ## Objective 1: Interpretable Regression Model
 
-High level description.
+For this model, we will fit a linear regression with the variables that we have identified as significant. Because the focus of this model is interpretability, we will not include any interaction terms, polynomials, or other transformations.
 
-Variable inclusion/explanation.
+Based on the exploratory analysis above, we will include the following variables in the regression model: 
+- gr_liv_area
+- lot_area
+- overall_qual
+- year_built
+- year_remod_add
+- total_bsmt_sf
+- garage_area
+- all neighborhood dummy variables
+- lot_config_fr2
+- house_style1story
+- exter_qual_gd
+- fireplace_qu_none
+- sale_type_con
 
 ```{r}
+# Train a linear regression model with caret using CV
+train <- ames %>%
+  filter(train == 1) %>%
+  select(-train)
 
+predictor_vars <- c(
+  "gr_liv_area", "lot_area", "overall_qual", "year_built", "year_remod_add",
+  "total_bsmt_sf", "garage_area", #"x1st_flr_sf", "x2nd_flr_sf", #removed for vif
+  "lot_config_fr2", "house_style1story", "exter_qual_gd", "fireplace_qu_none", "sale_type_con"
+) %>% paste(collapse = " + ")
+neighborhood_vars <- grep("neighborhood", colnames(train), value = TRUE) %>% paste(collapse = " + ")
+terms <- (paste(predictor_vars, neighborhood_vars, sep = " + ", collapse = " + "))
+formula <- as.formula(paste("sale_price ~", terms, "- neighborhood_veenker"))
+
+set.seed(137)
+ctrl <- trainControl(method = "cv", number = 10, verboseIter = TRUE)
+lmFit <- train(formula, data = train, method = "lm", trControl = ctrl, metric = "RMSE")
+summary(lmFit)
+confint(lmFit$finalModel)
+
+vif(lmFit$finalModel)
+
+# Plot the RMSE for each fold
+lmFit$resample %>%
+  ggplot(aes(x = (1:10), y = RMSE)) +
+  geom_point() +
+  geom_line() +
+  theme_gdocs() +
+  labs(title = "RMSE for each fold", x = "Fold", y = "RMSE")
 ```
 
 Summary table of coefficients.
