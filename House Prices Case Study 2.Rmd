@@ -427,15 +427,15 @@ predictor_vars <- c(
   "log_gr_liv_area", "log_lot_area", "overall_qual_2", "year_built", "year_remod_add",
   "log_total_bsmt_sf", "log_garage_area", "lot_config_fr2", "house_style1story", "exter_qual_gd",
   "fireplace_qu_none", "sale_type_con"#, ". -sale_price" #Can include "." to make really complex
-)
-neighborhood_vars <- grep("neighborhood", colnames(train), value = TRUE)
-terms <- (paste(predictor_vars, neighborhood_vars, sep = " + ", collapse = " + "))
+) %>% paste(collapse = " * ")
+neighborhood_vars <- grep("neighborhood", colnames(train), value = TRUE) %>% paste(collapse = " + ")
+terms <- (paste(predictor_vars, neighborhood_vars, sep = " + "))
 formula <- as.formula(paste("log_sale_price ~", terms, "- neighborhood_veenker"))
 
 # Complex LR with stepwise selection
 
 # Check if the model object exists, train if it doesn't
-if (file.exists("Models/lm_complex.rds")) {
+if (file.exists("Models/lm_complex_intXX.rds")) {
   # Load the model object from disk
   lmComp <- readRDS("Models/lm_complex.rds")
 } else {
@@ -449,7 +449,7 @@ if (file.exists("Models/lm_complex.rds")) {
   set.seed(137)
   lmComp <- train(formula,
     data = train,
-    method = "glmnet",
+    method = "glmStepAIC",
     trControl = trainControl(method = "cv", number = 5, allowParallel = TRUE),
     direction = "both",
     penter = 0.05 # Not Working.
@@ -459,7 +459,7 @@ if (file.exists("Models/lm_complex.rds")) {
   stopCluster(cl)
   
   # Save the model object to disk
-  saveRDS(lmComp, "Models/lm_complex.rds")
+  saveRDS(lmComp, "Models/lm_complex_int.rds")
 }
 
 defaultSummary(data.frame(pred = predict(lmComp), obs = train$log_sale_price))
@@ -477,9 +477,11 @@ coef(lmComp$finalModel,opt.pen)
 # Select only these variables from the testing dataset
 # Get the names of the variables used in the model
 var_names <- lmComp$finalModel$xNames
-new_test <- test[, c("id", var_names)]
-id_col <- new_test$id
-stepwise_pred <- predict((lmComp), newx = as.matrix(new_test))
+new_test <- test[, c(var_names, "neighborhood_veenker")]
+id_col <- test$id
+stepwise_pred <- predict(lmComp, newdata = as.matrix(new_test))
+
+check <- predict(lmComp, newdata = as.matrix(new_test[1, ]))
 
 # Save predictions
 data.frame(id = id_col, SalePrice = exp(stepwise_pred)) %>%
