@@ -1,9 +1,11 @@
 ---
-title: "Case Study: House Prices and Regressions"
-subtitle: "DS 6372 Project 1"
+title: 'Case Study: House Prices and Regressions'
 author: "Anish Bhandari, Will Jones, Nicholas Sager"
 date: "6/3/2023"
-output: html_document
+output:
+  html_document: default
+  word_document: default
+subtitle: DS 6372 Project 1
 ---
 
 ```{r setup, include=FALSE}
@@ -22,20 +24,23 @@ library(doParallel)
 #library(class)
 ```
 
-
 ## Introduction
 
-Introduction text
+In the dynamic field of data science, modeling serves as a vital tool for comprehending and predicting intricate relationships among variables. In this project, we will undertake a comprehensive exploration encompassing data processing, exploratory data analysis, and model construction. Our primary objective is to construct robust and reliable models that offer valuable insights and demonstrate accurate predictive capabilities. The initial model will prioritize interpretability, enabling us to extract meaningful explanations. Subsequently, we will develop two additional models that emphasize accurate predictions.
 
 ## Data Description
 
-A description of the data, where it came from, and what it contains.
+Kaggle is used by data scientists and machine learning engineers to discover data, build models, and compete in challenges. One of the most popular competitions in Kaggle is 'House Prices - Advanced Regression Techniques'. As of 6/6/2023, this competition has close to 28K entries.
+
+The Ames Housing dataset was compiled by Dean De Cock and can be found in the link below. There are 2 files - train.csv and a test.csv. Both the datasets have 79 explanatory variables. Sales price is the response variable which is present in train and absent in test. The train dataset has 1460 unique rows and test dataset has 1459 unique rows.For the purpose of our modeling exercise, we will solely utilize the train dataset. However, we have included the test dataset to facilitate the assessment of predictive performance using Kaggle prediction scores.
+
+Dataset Link: <https://www.kaggle.com/c/house-prices-advanced-regression-techniques/data>
 
 ### Read the Data
 
 ```{r Import}
-train <- read.csv("Data/train.csv")
-test <- read.csv("Data/test.csv")
+train <- read.csv("https://raw.githubusercontent.com/NickSager/DS_6372_Ames2/master/Data/train.csv")
+test<- read.csv("https://raw.githubusercontent.com/NickSager/DS_6372_Ames2/master/Data/test.csv")
 
 # Merge the data frames and add a column indicating whether they come from the train or test set
 train$train <- 1
@@ -48,12 +53,14 @@ head(ames)
 str(ames)
 summary(ames)
 ```
+
 For data cleaning purposes, we will merge test and train into one dataset, keeping in mind that the 1459 NA's in the SalePrice column are from the test set. We will also add a column to indicate whether the row is from the train or test set.
 
-### Data Cleaning
-In order to use a linear regression model, we need to convert all of the categorical variables into dummy variables. We will also remove or impute the NA's in the data set. Please see the appendix for details on this process.
+### Data Cleaning 
 
-First, we will visualize where the NA values are and whether it will affect the first two parameters we are concerned about: Sale Price and Gross Living Area.
+In order to use a linear regression model, we need to convert all of the categorical variables into dummy variables. We will also remove or impute the NA's in the data set.
+
+
 ```{r}
 # Summarize NA's by  column
 ames %>%
@@ -74,11 +81,19 @@ ames %>%
   arrange(desc(NA_Count)) %>%
   select(-Id) %>% 
   kable()
+
+
+
+library(naniar)
+vis_miss(ames[c(2:40)],cluster = TRUE, sort_miss =TRUE)
+vis_miss(ames[c(41:81)],cluster = TRUE, sort_miss = TRUE)
+
 ```
+
 There are not too many NA's in the data set, and they appear mostly to do with lack of a certain feature. For example, if a house does not have a pool, then the PoolQC column will be NA.
 
 ```{r NA Values}
-# Data Cleaning
+# Imputation
 
 # If pool-related variables are NA, assume there is no pool and assign to 0
 ames <- ames %>%
@@ -90,14 +105,14 @@ ames <- ames %>%
 ames <- ames %>%
   mutate(
     GarageType = ifelse(is.na(GarageType), "None", GarageType),
-    #GarageYrBlt = ifelse(is.na(GarageYrBlt), 0, GarageYrBlt), #These will be changed to the mean because of large year values
+   GarageYrBlt = ifelse(is.na(GarageYrBlt), 1979, GarageYrBlt), #These will be changed to the mean because of large year values
     GarageFinish = ifelse(is.na(GarageFinish), "None", GarageFinish),
     GarageCars = ifelse(is.na(GarageCars), 0, GarageCars),
     GarageArea = ifelse(is.na(GarageArea), 0, GarageArea),
     GarageQual = ifelse(is.na(GarageQual), "None", GarageQual),
     GarageCond = ifelse(is.na(GarageCond), "None", GarageCond)
   )
-# If Bsmt-related variables are NA, assume there is no Bsmt and assign to 0
+# If Bsmt-related variables are NA, assume there is no Bsmt and assign to 0, Masvertype to 0, Utilities to All pub which is the most common, and Exterior to other
 ames <- ames %>%
   mutate(
     BsmtQual = ifelse(is.na(BsmtQual), "None", BsmtQual),
@@ -110,7 +125,14 @@ ames <- ames %>%
     BsmtUnfSF = ifelse(is.na(BsmtUnfSF), 0, BsmtUnfSF),
     BsmtFullBath = ifelse(is.na(BsmtFullBath), 0, BsmtFullBath),
     BsmtHalfBath = ifelse(is.na(BsmtHalfBath), 0, BsmtHalfBath),
-    TotalBsmtSF = ifelse(is.na(TotalBsmtSF), 0, TotalBsmtSF)
+    TotalBsmtSF = ifelse(is.na(TotalBsmtSF), 0, TotalBsmtSF),
+    LotFrontage = ifelse(is.na(LotFrontage), 0, LotFrontage),
+    MasVnrArea = ifelse(is.na(MasVnrArea), 0, MasVnrArea),
+    MasVnrType = ifelse(is.na(MasVnrType), "None", MasVnrType),
+    Utilities = ifelse(is.na(Utilities), "AllPub", Utilities),
+    Exterior1st = ifelse(is.na(Exterior1st), "Other", Exterior1st),
+    Exterior2nd = ifelse(is.na(Exterior2nd), "Other", Exterior2nd),
+    Electrical = ifelse(is.na(Electrical), "FuseA", Electrical),
   )
 # If Fence-related variables are NA, assume there is no Fence and assign to 0
 ames <- ames %>%
@@ -136,6 +158,10 @@ ames <- ames %>%
 # Summarize the amount of remaining NA's by column to check what's left
 colSums(is.na(ames))
 
+# create a dataset for eda named ameseda
+ameseda <- ames[ames$train == 1, ]
+
+
 # Use the dummyVars() function to convert categorical variables into dummy variables
 # Then use janitor::clean_names() to clean up the column names
 dummy_model <- dummyVars(~ ., data = ames)
@@ -149,19 +175,294 @@ ames_dummy <- ames_dummy %>%
     c(-sale_price, -train),
     ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)
   ))
-# Summarize the amount of remaining NA's by column
-colSums(is.na(ames_dummy))
 
-# Assign ames_dummy to ames for the rest of the analysis
-ames <- ames_dummy
+# create ames dataset for modeling to be consistent with team member's terminology
+ames <-ames_dummy
+
+# Summary of missing values post imputation and changing into dummy. Sales Price from the 'test' dataset is the only column with missing values. 
+
+gg_miss_var(ames_dummy[,c(1:50)])
+gg_miss_var(ames_dummy[,c(51:100)])
+gg_miss_var(ames_dummy[,c(101:150)])
+gg_miss_var(ames_dummy[,c(151:200)])
+gg_miss_var(ames_dummy[,c(201:250)])
+gg_miss_var(ames_dummy[,c(250:305)])
+
+
+
+
+vis_miss(ameseda[c(2:40)],cluster = TRUE, sort_miss =TRUE)
+vis_miss(ameseda[c(41:81)],cluster = TRUE, sort_miss = TRUE)
 
 # Split the data into training and testing sets
-# train <- ames_dummy[ames_dummy$train == 1, ]
-# test <- ames_dummy[ames_dummy$train == 0, ] # For Kaggle only. Will split train into train/test for model building.
+train <- ames_dummy[ames_dummy$train == 1, ]
+test <- ames_dummy[ames_dummy$train == 0, ] # For Kaggle only. Will split train into train/test for model building.
 ```
-We can write as much or as little about this as we'd like. Basically, we tried to interpret what the NA's actually were saying and then make a more informed guess as to what the were rather than going with the mean. In most cases, this created a new category of "none". Remaining values were imputed to the mean, and the data was split into training and testing sets.
 
-Transformations:
+Imputation:
+
+Pool related variables: Upon investigation, we discovered that the missing data for pool-related variables followed a MNAR (Missing Not at Random) pattern, specifically in homes without pools. To address this, we replaced the missing values with "none" or 0, depending on the variable type.
+
+Garage related variables: Our investigation revealed that the missing data for garage-related variables also followed a MNAR pattern, particularly in homes without garages. To handle this, we imputed the missing values with "none" or 0, depending on the variable type.
+
+Basement related variables: Similar to the pool and garage variables, the missing data for basement-related variables displayed a MNAR pattern, primarily in homes without basements. We addressed this by replacing the missing values with "none" or 0, based on the variable type.
+
+Additionally, categorical variables such as Fence, Fireplace, and Alley, which exhibited a MNAR pattern, were assigned the value "none."
+
+For variables that followed a MCAR (Missing Completely at Random) pattern and had a relatively low number of missing values, we imputed the missing values with the mean of the variable.
+
+The datasets after imputation and processing were split back to 'test' and 'train'.
+
+## Exploratory Data Analysis
+
+Moving forward, we will delve into an exploration of the Ames housing market data, aiming to extract valuable insights. By closely examining the dataset, we aim to uncover key patterns, trends, and relationships that will assist us to robust models.
+
+### Numerical Data Analysis I
+
+```{r Numeric Summary Statistics}
+#ameseda_n is used for eda analysis on all numeric variables
+
+ameseda_n <- ameseda %>%
+  select_if(function(x) is.numeric(x) || is.integer(x))
+
+#library(gridExtra)
+
+# Preperation values for ggplot 
+ames_long <- ameseda_n %>%
+ pivot_longer(everything(), names_to = "variable", values_to = "value")
+
+# Set the plot size and aspect ratio
+options(repr.plot.width = 10, repr.plot.height = 6)
+
+# Divide the variables into 4 groups
+
+# Group 1
+group1 <- c( "MSSubClass", "LotFrontage", "LotArea", "OverallQual", "OverallCond", "YearBuilt", "YearRemodAdd")
+
+# Group 2
+group2 <- c("MasVnrArea", "BsmtFinSF1", "BsmtFinSF2", "BsmtUnfSF", "TotalBsmtSF", "X1stFlrSF", "X2ndFlrSF", "LowQualFinSF")
+
+# Group 3
+group3 <- c("GrLivArea", "BsmtFullBath", "BsmtHalfBath", "FullBath", "HalfBath", "BedroomAbvGr", "KitchenAbvGr", "TotRmsAbvGrd")
+
+# Group 4
+group4 <- c("Fireplaces", "GarageYrBlt", "GarageCars", "GarageArea", "WoodDeckSF", "OpenPorchSF", "EnclosedPorch",
+            "X3SsnPorch", "ScreenPorch", "PoolArea", "MiscVal", "MoSold", "YrSold", "SalePrice")
+
+
+
+# Create plots for each group of variables
+plot1 <- ames_long %>% 
+  filter(variable %in% group1) %>% 
+  ggplot(aes(x = variable, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free") +
+  theme(axis.text.x = element_blank()) +
+  labs(title = "Boxplots - Group 1", x = "Variables", y = "Values")
+
+plot2 <- ames_long %>% 
+  filter(variable %in% group2) %>% 
+  ggplot(aes(x = variable, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free") +
+  theme(axis.text.x = element_blank()) +
+  labs(title = "Boxplots - Group 2", x = "Variables", y = "Values")
+
+plot3 <- ames_long %>% 
+  filter(variable %in% group3) %>% 
+  ggplot(aes(x = variable, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free") +
+  theme(axis.text.x = element_blank()) +
+  labs(title = "Boxplots - Group 3", x = "Variables", y = "Values")
+
+plot4 <- ames_long %>% 
+  filter(variable %in% group4) %>% 
+  ggplot(aes(x = variable, y = value)) +
+  geom_boxplot() +
+  facet_wrap(~variable, scales = "free") +
+  theme(axis.text.x = element_blank()) +
+  labs(title = "Boxplots - Group 4", x = "Variables", y = "Values")
+
+# Summary table on all numeric variables from dataset 
+library(psych)
+describe(ameseda_n)
+
+# Display plots
+plot1
+plot2
+plot3
+plot4
+
+
+```
+
+Upon analyzing the boxplots and summary table, we observe that the majority of the numerical variables exhibit a right-skewed distribution. However, a few variables, namely YearBuilt, YearRemodAdd, GarageYrBlt, and GarageCars, display a left-skewed distribution. Our response variable, SalePrice, also demonstrates a right-skewed distribution and reveals the presence of outliers.
+
+### Categorical Data Anaylsis I
+
+```{r Categorical Summary Statistics}
+
+#creating a dataset for all categorical variables
+ameseda_c <- ameseda %>%
+  select_if(function(x) is.character(x))
+
+
+# converting all variables into factor
+ameseda_c <- ameseda_c %>% mutate_all(as.factor)
+
+ameseda_c <- ameseda_c %>%
+  mutate(SalePrice = ameseda_n$SalePrice)
+
+
+
+
+# Assuming your dataset is stored in the variable 'dataset'
+dataset <- ameseda_c
+response_variable <- ameseda_c$SalePrice
+
+
+# Assuming your dataset is stored in the variable 'dataset'
+response_variable <- "SalePrice"
+
+# Define the categorical variables (replace with the provided variable names)
+categorical_variables <- c("MSZoning", "Street", "Alley", "LotShape", "LandContour", "Utilities", "LotConfig", "LandSlope",
+                           "Neighborhood", "Condition1", "Condition2", "BldgType", "HouseStyle", "RoofStyle", "RoofMatl",
+                           "Exterior1st", "Exterior2nd", "MasVnrType", "ExterQual", "ExterCond", "Foundation", "BsmtQual",
+                           "BsmtCond", "BsmtExposure", "BsmtFinType1", "BsmtFinType2", "Heating", "HeatingQC", "CentralAir",
+                           "Electrical", "KitchenQual", "Functional", "FireplaceQu", "GarageType", "GarageFinish",
+                           "GarageQual", "GarageCond", "PavedDrive", "PoolQC", "Fence", "MiscFeature", "SaleType",
+                           "SaleCondition")
+
+# Create a list to store the plots
+plots <- list()
+
+# Loop through the categorical variables and create a histogram for each
+for (variable in categorical_variables) {
+  plot <- ggplot(dataset, aes_string(x = response_variable, fill = variable)) +
+    geom_histogram(color = "black", bins = 30) +
+    labs(title = paste("Histogram of", response_variable, "-", variable),
+         x = response_variable, fill = variable) +
+    theme_bw()
+  
+  plots[[variable]] <- plot
+}
+
+# Display the plots
+for (variable in categorical_variables) {
+  print(plots[[variable]])
+}
+
+
+# Loop through the categorical variables and create a scatter plot for each
+for (variable in categorical_variables) {
+  plot <- ggplot(dataset, aes_string(x = response_variable, y = variable, color = variable)) +
+    geom_point() +
+    labs(title = paste("Scatter Plot of", response_variable, "vs", variable),
+         x = response_variable, y = variable, color = variable) +
+    theme_bw()
+  
+  print(plot)
+}
+
+
+
+
+
+# added this to summarize
+#library(psych)
+#describe(ameseda_n)
+
+
+
+```
+
+Based on the histograms and scatter plots of the Sales Price when separated by categorical variables, we can identify the following variables that potentially have a good distribution and may be favorable for modeling the Sales Price: MSZoning, RoofStyle, Exterior1st, Exterior2nd, LotShape, LandContour, LotConfig, Neighborhood, BldgType, HouseStyle, HeatingQC, CentralAir, KitchenQual, FireplaceQu, GarageType, GarageFinish, PavedDrive, SaleType, SaleCondition, Condition1, MasVnrType, ExterQual, ExterCond, Foundation, BsmtQual, BsmtCond, BsmtFinType1, Electrical, Functional, GarageQual, GarageCond.
+
+Conversely, the following variables are less likely to be useful in modeling the Sales Price: Street, Alley, Utilities, LandSlope, Condition2, RoofMatl, PoolQC, Fence, MiscFeature, BsmtExposure, BsmtFinType2.These variables may not provide significant insights or exhibit a clear relationship with the Sales Price.
+
+### Numerical Data Analysis II
+
+```{r}
+
+# create correlation plot for the numerical variables
+library(corrplot)
+corrplot(cor(ameseda_n),tl.cex = 0.6)
+
+
+# ggpairs based on the corelation plot. We didn't plot every single numerical variable. We chose the ones that had high corelation with SalePrice from the correlation plot
+library(GGally)
+library(dplyr)
+
+
+
+lowerFn <- function(data, mapping, method = "lm", ...) {
+  p <- ggplot(data = data, mapping = mapping) +
+    geom_point(colour = "blue", size = .2) +
+    geom_smooth(method = loess, color = "red", ...)
+  p
+}
+
+# First plot with selected variables
+ameseda_n %>%
+  select(SalePrice, OverallQual, LotArea, YearBuilt, GrLivArea) %>%
+  ggpairs(lower = list(continuous = lowerFn))
+
+# Second plot with selected variables
+ameseda_n %>%
+  select(SalePrice, YearRemodAdd, TotalBsmtSF, X1stFlrSF, LowQualFinSF) %>%
+  ggpairs(lower = list(continuous = lowerFn))
+
+# Third plot with selected variables
+ameseda_n %>%
+  select(SalePrice, FullBath, TotRmsAbvGrd, Fireplaces, GarageYrBlt, GarageCars, GarageArea) %>%
+  ggpairs(lower = list(continuous = lowerFn))
+
+vif(lm(SalePrice ~ OverallQual + YearBuilt + GrLivArea+YearRemodAdd+ X1stFlrSF+TotalBsmtSF+FullBath+TotRmsAbvGrd+GarageCars+Fireplaces+GarageYrBlt + GarageArea + LotArea, data=ameseda_n))
+
+```
+
+Based on the correlation plot, we observed a relationship between the response variable SalePrice and several predictor variables. It is noteworthy that the relationship appears to be quadratic in most cases, which could be influenced by the presence of high SalePrice values. Among the variables, SalePrice exhibits strong correlations with the following variables: OverallQual (0.791), GrLivArea (0.709),GarageArea(0.623) GarageCars (0.640), X1stFlrSF (0.606), TotalBsmtSF (0.614), FullBath (0.561), TotalRmsAbvGrd (0.534), YearBuilt (0.523), YearRemodAdd (0.507), and GarageYrBlt (mild correlation).
+
+The variable "LotArea" shows a correlation coefficient of 0.264 with the response variable. However, it is important to note that this correlation may be influenced by the presence of outliers with unusually high lot area values. These outliers can have a significant impact on the correlation coefficient, potentially inflating or deflating its magnitude.
+
+Therefore, it is necessary to exercise caution when interpreting the correlation between "LotArea" and the response variable. Further analysis and consideration of the data, including the examination of outliers and their potential influence, would provide a more accurate understanding of the relationship between lot area and the response variable.
+
+To assess multicollinearity among these correlated variables, we performed a multicollinearity analysis. Among them, GrLivArea, GarageCars, and GarageArea exhibited a borderline level of collinearity with a VIF of around 5.
+
+It is important to consider these correlations and collinearity issues when modeling the SalePrice variable. Further analysis and modeling techniques may be necessary to address the quadratic relationships and potential collinearity effects in order to build an accurate predictive model.
+
+### Categorical Data Analysis II
+
+```{r}
+# Fit a linear model with categorical variables to validate our visual findings
+
+# Use the dummyVars() function to convert categorical variables into dummy variables
+# Then use janitor::clean_names() to clean up the column names
+dummy_model <- dummyVars(~ ., data = ameseda_c)
+ames_dummy <- as.data.frame(predict(dummy_model, newdata = ameseda_c))
+ames_dummy <- clean_names(ames_dummy)
+
+
+options(max.print = 2000)
+
+
+cbind(ameseda_n$SalePrice, ames_dummy) %>% #str()
+  lm(ameseda_n$SalePrice ~ ., data = .) %>%
+  summary()
+
+```
+
+After converting our categorical variables into dummy variables and running a model to assess their significance, we found that the variable "Neighborhood" emerged as the most significant predictor. This suggests that the neighborhood of a property plays a crucial role in determining the response variable. However, it's important to note that in a more complex model, the significance of "Neighborhood" may be influenced by its interaction with other variables.
+
+Considering the complexity of the model, it is possible that interactions between "Neighborhood" and other variables could yield significant effects on the response variable. Therefore, it would be beneficial to explore these potential interactions and evaluate their significance in order to obtain a more comprehensive understanding of the predictors' impact on the outcome.
+
+Here we can see that all of the neighborhood variables are significant, suggesting that neighborhood is an important factor in determining sale price. Several other categorical values look important including: lot_config_fr2, house_style1story, exter_qual_gd, fireplace_qu_none, and sale_type_con.
+
+### Transformations
+
+In the following chunk of code, we are generating new columns to capture transformed versions of different attributes. These transformations will be further analyzed in the subsequent sections.
+
 ```{r Transformations}
 # Create columns for log(SalePrice) and log(GrLivArea)
 ames$log_sale_price <- log(ames$sale_price)
@@ -175,88 +476,8 @@ ames$log_total_bsmt_sf = ames$total_bsmt_sf %>% log()
 ames$log_garage_area = ames$garage_area %>% log()
 ames$log_x1st_flr_sf = ames$x1st_flr_sf %>% log()
 ```
-This chunk creates new columns for transformations of various attributes. We will explore the reasoning for these in the Exploratory Data Analysis section below.
 
-## Exploratory Data Analysis
-Next, we will start exploring the data for insights into the Ames housing market. This analysis will serve as a foundation for our model building efforts.
-
-Summary Statistics:  
-**Fix these boxplots **
-```{r Numeric Summary Statistics}
-# Summary statistics for all numeric variables
-calculate_range <- function(x) {
-    return(max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
-}
-ames_non_dummy <- ames[sapply(ames, calculate_range) != 1]
-summary(ames_non_dummy)
-
-ames_long <- ames_non_dummy %>%
-  pivot_longer(everything(), names_to = "variable", values_to = "value")
-ames_long %>% ggplot(aes(x = variable, y = value)) +
-  geom_boxplot() +
-  facet_wrap(~variable, scales = "free") +
-  theme(axis.text.x = element_blank()) +
-  labs(title = "Boxplots for each variable", x = "Variables", y = "Values")
-```
-Here we can see the summary statistics of each numeric variable. Some of the distributions appear to be heavily skewed and will need to be transformed or excluded for use in linear regression. Some variables such as Kitchen above ground, Low Quality square footage, and misc. val have extremely narrow distributions. We will exclude attributes like these from the models as the do not provide much information.
-
-** Fix barplot - too small **
-```{r Categorical Summary Statistics}
-# Summary statistics for all categorical variables
-ames_categorical <- ames[sapply(ames, calculate_range) == 1]
-ames_categorical %>%
-  summarise_all(mean) %>%
-  pivot_longer(everything(), names_to = "variable", values_to = "value") %>%
-  ggplot(aes(x = variable, y = value)) +
-  geom_bar(stat = "identity") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  labs(title = "Barplot of categorical variables", x = "Variables", y = "Proportion") +
-  coord_flip()
-# Fix or exclude the plot.
-
-ames_categorical %>%
-  summarise_all(mean) %>%
-  round(3) %>%
-  t() %>%
-  kable(col.names = c("Proportion"), caption = "Proportions of categorical variables")
-```
-This chart and table show the proportions of the total population which have each categorical variable. Attributes which have a very large or small proportion will likely be excluded from the models as they do not provide additional information. We expect that attributes with moderate proportions and the neighborhood values to be the most useful in predicting sale price.
-
-Next we will plot the a pairs matrix of selected continuous variables to see if there are obvious trends.
-```{r}
-# GGally plot of selected numeric variables
-library(GGally)
-
-lowerFn <- function(data, mapping, method = "lm", ...) {
-  p <- ggplot(data = data, mapping = mapping) +
-    geom_point(colour = "blue", size = .2) +
-    geom_smooth(method = loess, color = "red", ...)
-  p
-}
-
-# ames_non_dummy %>%
-#   ggpairs(lower=list(continuous=lowerFn))
-
-ames_non_dummy %>%
-  select(sale_price, gr_liv_area, lot_area, overall_qual, overall_cond,
-  year_built, year_remod_add, total_bsmt_sf, garage_area, bedroom_abv_gr, x1st_flr_sf) %>%
-  ggpairs(lower=list(continuous=lowerFn))
-```
-The first relationship that stands out is the one between Gross Living Area and sale price. There is a strong linear relationship here (Corr: 0.70) which may become even stronger with a log transformation. We will consider transformations later on. Lot area also appears to be linearly related to sale price, although with a much lower slope. Overall quality has a strong relationship with sale price as well. This will be another candidate for transformation as the relationship appears quadratic. Surprisingly overall condition does not show a linear relationship with sale price, but the vast majority of overall condition ratings are '5'.
-```{r}
-summary(as.factor(ames$overall_cond))
-```
-With scores of '5' removed, this variable may provide useful information about sale price, as there appears to be a linear relationship between price and non-'5' scores. Year Built and Year Remodelled show a relationship with sale price. It is linear at lower values of sale price, but appears quadratic across the whole range. These variables may also be candidates for transformation. Basement area and garage area appear weakly related to price, but contain enough information to include, possibly with transformation. First and second floor area also appear to be related to price. They may be candidates for transformation as well and do show some multicollinearity with Gross Living Area. If these are included, we will have consider whether variance inflation becomes a problem.
-
-```{r}
-# Fit a linear model with categorical variables to gauge importance
-cbind(ames$sale_price, ames_categorical) %>% #str()
-  lm(ames$sale_price ~ ., data = .) %>%
-  summary()
-```
-Here we can see that all of the neighborhood variables are significant, suggesting that neighborhood is an important factor in determining sale price. Several other categorical values look important including: lot_config_fr2, house_style1story, exter_qual_gd, fireplace_qu_none, and sale_type_con.
-
-Looking more closely at the data:
+### Sale Price Vs Gross Living Area by Neighborhood
 
 ```{r}
 # Plot Sale Price vs. Gross Living Area colored by neighborhood, omitting rows where SalePrice is NA
@@ -277,10 +498,11 @@ ames_long %>%
   theme_gdocs() +
   labs(title = "Sale Price vs. Gross Living Area by Neighborhood", x = "Gross Living Area", y = "Sale Price")
 ```
-There is clearly a relationship between Sale Price and Gross Living Area, and the neighborhoods appear to have a similar but separate relationships. This confirms the significance of Neighborhood that we saw in the linear model above.
 
-We will now look at log transformations of the data to see if there is more linear relationship.
-** Display side by side? **
+The relationship between Sale Price and Gross Living Area is evident, and we can observe that neighborhoods also exhibit distinct relationships with Sale Price. This reaffirms the significance of the Neighborhood variable as observed in the previous linear model.
+
+### Sale Price Vs Gross Living Area by Neighborhood (UnTransformed Vs Transformed)
+
 ```{r}
 # Untransformed variables
 par(mfrow = c(1, 2))
@@ -308,27 +530,22 @@ ames %>%
   )
 par(mfrow = c(1, 1))
 ```
-The log transformed sale price and square footage appear to have a more linear relationship. Using these will result in a more accurate regression model at the expense of interpretability.
 
+The log-transformed Sale Price and square footage exhibit a more linear relationship, indicating that utilizing these transformed variables will likely result in a more precise regression model. However, it is important to note that this enhanced accuracy comes at the cost of interpretability, as the transformed variables may be less intuitive to interpret directly.
+
+### EDA Conclusion
+
+During our exploratory data analysis (EDA), we undertook several important steps. Firstly, we cleaned the data by addressing any inconsistencies or missing values. Next, we examined both numerical and categorical variables, exploring their distributions and identifying potential patterns or trends.
+
+We also assessed the relationships between the explanatory variables and the response variable using visual and mathematical techniques. These analyses provided valuable insights into the dependencies and correlations within the dataset.
+
+By conducting this comprehensive EDA, we have equipped ourselves with the necessary foundation for achieving our two primary objectives: developing an interpretable regression model and constructing a more complex predictive model. The insights gained from our EDA will guide us in selecting meaningful features and formulating effective modeling strategies.
 
 ## Objective 1: Interpretable Regression Model
 
 For this model, we will fit a linear regression with the variables that we have identified as significant. Because the focus of this model is interpretability, we will not include any interaction terms, polynomials, or other transformations.
 
-Based on the exploratory analysis above, we will include the following variables in the regression model: 
-- gr_liv_area
-- lot_area
-- overall_qual
-- year_built
-- year_remod_add
-- total_bsmt_sf
-- garage_area
-- all neighborhood dummy variables
-- lot_config_fr2
-- house_style1story
-- exter_qual_gd
-- fireplace_qu_none
-- sale_type_con
+Based on the exploratory analysis above, we will include the following variables in the regression model: - gr_liv_area - lot_area - overall_qual - year_built - year_remod_add - total_bsmt_sf - garage_area - garage_cars-tot_rms_grd - all neighborhood dummy variables - lot_config_fr2 - house_style1story - exter_qual_gd - fireplace_qu_none - sale_type_con
 
 ```{r}
 # Train a linear regression model with caret using CV
@@ -336,10 +553,13 @@ train <- ames %>%
   filter(train == 1) %>%
   select(-train)
 
+
+
+
 predictor_vars <- c(
   "gr_liv_area", "lot_area", "overall_qual", "year_built", "year_remod_add",
-  "total_bsmt_sf", "garage_area", #"x1st_flr_sf", "x2nd_flr_sf", #removed for vif
-  "lot_config_fr2", "house_style1story", "exter_qual_gd", "fireplace_qu_none", "sale_type_con"
+  "total_bsmt_sf", "garage_area","garage_cars","tot_rms_abv_grd", #"x1st_flr_sf", "x2nd_flr_sf", #removed for vif
+ "lot_config_fr2", "house_style1story", "exter_qual_gd", "fireplace_qu_none", "sale_type_con"
 ) %>% paste(collapse = " + ")
 neighborhood_vars <- grep("neighborhood", colnames(train), value = TRUE) %>% paste(collapse = " + ")
 terms <- (paste(predictor_vars, neighborhood_vars, sep = " + ", collapse = " + "))
@@ -364,6 +584,7 @@ lmFit$resample %>%
 ```
 
 Summary table of coefficients.
+
 ```{r}
 # Summary table of coefficients
 
@@ -380,21 +601,25 @@ table <- tidy_fit %>%
 
 table
 ```
+
 Note that the reference Neighborhood is Veenker, so all neighborhood adjustments are relative to it.
 
-The interpretable linear regression does moderately well. Its RMSE from 10-fold cross validation on the training data is $34,020. This means that the model is within about $70,000 95% of the time. Given that the mean sale price for a house in Ames during the time period covered by our dataset is $180,000, the RMSE implies that the predicted price is within 38% of the actual price 95% of the time. This is not great, but it is a good starting point. 
+The interpretable linear regression does moderately well. Its RMSE from 10-fold cross validation on the training data is \$34,020. This means that the model is within about \$70,000 95% of the time. Given that the mean sale price for a house in Ames during the time period covered by our dataset is \$180,000, the RMSE implies that the predicted price is within 38% of the actual price 95% of the time. This is not great, but it is a good starting point.
 
 The benefit of this type of model is its interpretability. To demonstrate this, we will interpret one numerical coefficient and one categorical coefficient.
 
-- Holding all other variables constant a one hundred square foot increase in gross living area is associated with a $4,940 increase in sale price (p < 0.001 from linear regression). Based on our model, we can be 95% confidence that the true increase in sale price is between $4,350 and $5,530 for a one hundred square foot increase in gross living area.
+-   Holding all other variables constant a one hundred square foot increase in gross living area is associated with a \$4,593 increase in sale price (p \< 0.001 from linear regression). Based on our model, we can be 95% confidence that the true increase in sale price is between \$4,171 and \$5,013 for a one hundred square foot increase in gross living area.
 
-- Holding all other variables constant, being located in the Old Town neighborhood is associated with a approximately $47,700 decrease in sale price compared to a house in the Veenker neighborhood (p < 0.001 from linear regression). Based on our model, we can be 95% confident that the true decrease in sale price is between $24,450 and $70,984 for a house in the Old Town neighborhood compared to a house in the Veenker neighborhood.
+-   Holding all other variables constant, being located in the Old Town neighborhood is associated with a \$47,703 decrease in sale price compared to a house in the Veenker neighborhood (p \< 0.001 from linear regression). Based on our model, we can be 95% confident that the true decrease in sale price is between \$35,888 and \$59,518 for a house in the Old Town neighborhood compared to a house in the Veenker neighborhood.
 
 Because we are using a linear regression model, we must check the assumptions of the model:
+
 ```{r}
 plot(lmFit$finalModel)
 ```
+
 The residuals for this model show some evidence of non-linearity and non-constant variance (heteroscedasticity). There is no evidence of non-normality, and there are no influential points that need to be addressed. We will address the issues in the next section when including transformations in our model.
+
 
 
 ## Objective 2: Predictive Model
@@ -403,6 +628,7 @@ Summary of approach to include complexity (further EDA if necessary)
 
 Further EDA for Transformations:
 ```{r}
+ames_non_dummy <- ames[sapply(ames, calculate_range) != 1]
 ames_non_dummy %>%
   select(log_sale_price, log_gr_liv_area, log_lot_area, overall_qual_2, overall_cond,
   year_built, year_remod_add, log_total_bsmt_sf, log_garage_area, bedroom_abv_gr, log_x1st_flr_sf) %>%
