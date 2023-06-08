@@ -418,6 +418,7 @@ ameseda_n %>%
   select(SalePrice, FullBath, TotRmsAbvGrd, Fireplaces, GarageYrBlt, GarageCars, GarageArea) %>%
   ggpairs(lower = list(continuous = lowerFn))
 
+library(car)
 vif(lm(SalePrice ~ OverallQual + YearBuilt + GrLivArea+YearRemodAdd+ X1stFlrSF+TotalBsmtSF+FullBath+TotRmsAbvGrd+GarageCars+Fireplaces+GarageYrBlt + GarageArea + LotArea, data=ameseda_n))
 
 ```
@@ -624,19 +625,18 @@ The residuals for this model show some evidence of non-linearity and non-constan
 
 ## Objective 2: Predictive Model
 
-Summary of approach to include complexity (further EDA if necessary)
+To fit a linear model with more complexity, we included the transformations dicussed in the EDA. This includes using the log of sale price, gross living area, and the other areas measured. Using log transformations will make it difficult to interpret the coefficients, but it will result in better predictions based on the realtionships shown below.
 
-Further EDA for Transformations:
+EDA for transformed continuous variables:
 ```{r}
-ames_non_dummy <- ames[sapply(ames, calculate_range) != 1]
-ames_non_dummy %>%
+# ames_non_dummy <- ames[sapply(ames, calculate_range) != 1]
+train %>%
   select(log_sale_price, log_gr_liv_area, log_lot_area, overall_qual_2, overall_cond,
   year_built, year_remod_add, log_total_bsmt_sf, log_garage_area, bedroom_abv_gr, log_x1st_flr_sf) %>%
   ggpairs(lower=list(continuous=lowerFn))
 ```
 
-EDA For interactions?:
-
+EDA For interactions?: Running interaction model in the background. Will include if it finishes in time.
 
 Complex LR with feature selection:
 ```{r}
@@ -653,7 +653,7 @@ predictor_vars <- c(
   "log_gr_liv_area", "log_lot_area", "overall_qual_2", "year_built", "year_remod_add",
   "log_total_bsmt_sf", "log_garage_area", "lot_config_fr2", "house_style1story", "exter_qual_gd",
   "fireplace_qu_none", "sale_type_con"#, ". -sale_price" #Can include "." to make really complex
-) %>% paste(collapse = " * ")
+) %>% paste(collapse = " + ")
 neighborhood_vars <- grep("neighborhood", colnames(train), value = TRUE) %>% paste(collapse = " + ")
 terms <- (paste(predictor_vars, neighborhood_vars, sep = " + "))
 formula <- as.formula(paste("log_sale_price ~", terms, "- neighborhood_veenker"))
@@ -661,7 +661,7 @@ formula <- as.formula(paste("log_sale_price ~", terms, "- neighborhood_veenker")
 # Complex LR with stepwise selection
 
 # Check if the model object exists, train if it doesn't
-if (file.exists("Models/lm_complex_intXX.rds")) {
+if (file.exists("Models/lm_complexY.rds")) {
   # Load the model object from disk
   lmComp <- readRDS("Models/lm_complex.rds")
 } else {
@@ -675,7 +675,7 @@ if (file.exists("Models/lm_complex_intXX.rds")) {
   set.seed(137)
   lmComp <- train(formula,
     data = train,
-    method = "glmStepAIC",
+    method = "glmnet",
     trControl = trainControl(method = "cv", number = 5, allowParallel = TRUE),
     direction = "both",
     penter = 0.05 # Not Working.
@@ -685,7 +685,7 @@ if (file.exists("Models/lm_complex_intXX.rds")) {
   stopCluster(cl)
   
   # Save the model object to disk
-  saveRDS(lmComp, "Models/lm_complex_int.rds")
+  saveRDS(lmComp, "Models/lm_complex.rds")
 }
 
 defaultSummary(data.frame(pred = predict(lmComp), obs = train$log_sale_price))
@@ -707,12 +707,10 @@ new_test <- test[, c(var_names, "neighborhood_veenker")]
 id_col <- test$id
 stepwise_pred <- predict(lmComp, newdata = as.matrix(new_test))
 
-check <- predict(lmComp, newdata = as.matrix(new_test[1, ]))
-
 # Save predictions
 data.frame(id = id_col, SalePrice = exp(stepwise_pred)) %>%
   dplyr::select(id, SalePrice) %>%
-  write_csv("Predictions/complexlm_predictions.csv")
+  write_csv("Predictions/complexlm_predictions1.csv")
 
 # stepwise_pred %>%
 #   data.frame() %>%
@@ -720,6 +718,18 @@ data.frame(id = id_col, SalePrice = exp(stepwise_pred)) %>%
 #   mutate(SalePrice = exp(stepwise_pred)) %>%
 #   dplyr::select(id, SalePrice) %>%
 #   write_csv("Predictions/complexlm_predictions.csv")
+```
+
+The linear regression model with transformations does better than the interpretable model. The RMSE is 0.0152 on the log scale which translates to roughly a 16% multipliciative change on the original scale. Interpreting this is difficult due to the complexity of the model, but this approximately corresponds to a \$27,000 error in the predicted sale price. This is a significant improvement over the \$34,000 error from the interpretable model. 
+
+From the coefficients, we can see that the penalized regression included most of the coefficients from the previous model. Total basement area and garage are ended up being excluded, as well as Neghborhoods blmngtn and blueste.
+
+Because we are still using a linear regression model, we must check the assumptions of the model:
+
+```{r}
+# Plot the residuals of lmComp
+
+
 ```
 
 ```{r}
