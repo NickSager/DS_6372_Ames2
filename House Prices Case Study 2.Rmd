@@ -172,7 +172,7 @@ ames_dummy <- clean_names(ames_dummy)
 # Fill in all remaining na values with the mean of the column
 ames_dummy <- ames_dummy %>%
   mutate(across(
-    c(-sale_price, -train),
+    c(-sale_price) ,# , -train),
     ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)
   ))
 
@@ -194,9 +194,6 @@ gg_miss_var(ames_dummy[,c(250:305)])
 vis_miss(ameseda[c(2:40)],cluster = TRUE, sort_miss =TRUE)
 vis_miss(ameseda[c(41:81)],cluster = TRUE, sort_miss = TRUE)
 
-# Split the data into training and testing sets
-train <- ames_dummy[ames_dummy$train == 1, ]
-test <- ames_dummy[ames_dummy$train == 0, ] # For Kaggle only. Will split train into train/test for model building.
 ```
 
 Imputation:
@@ -215,11 +212,11 @@ The datasets after imputation and processing were split back to 'test' and 'trai
 
 Influential points in training data:
 ```{r Influential Points}
-train[524, ] %>% select(sale_price, gr_liv_area)
-train[1299, ] %>% select(sale_price, gr_liv_area)
+ames[524, ] %>% select(sale_price, gr_liv_area)
+ames[1299, ] %>% select(sale_price, gr_liv_area)
 
 # Remove the two outliers
-train <- train[-c(524, 1299), ]
+ames <- ames[-c(524, 1299), ]
 ```
 Observations 524 and 1299 were identified as outliers based on their GrLivArea and SalePrice values. These observations were removed from the training dataset due to their very atypical values. We will assume that there is some other reason for these values which isn't accounted for in the data.
 
@@ -559,6 +556,14 @@ For this model, we will fit a linear regression with the variables that we have 
 Based on the exploratory analysis above, we will include the following variables in the regression model: - gr_liv_area - lot_area - overall_qual - year_built - year_remod_add - total_bsmt_sf - garage_area - garage_cars-tot_rms_grd - all neighborhood dummy variables - lot_config_fr2 - house_style1story - exter_qual_gd - fireplace_qu_none - sale_type_con
 
 ```{r}
+# Split the data into training and testing sets
+train <- ames %>%
+  filter(train == 1) %>%
+  select(-train)
+test <- ames %>%
+  filter(train == 0) %>%
+  select(-train)
+
 # Train a linear regression model with caret using CV
 
 predictor_vars <- c(
@@ -609,7 +614,7 @@ table
 
 Note that the reference Neighborhood is Veenker, so all neighborhood adjustments are relative to it.
 
-The interpretable linear regression does moderately well. Its RMSE from 10-fold cross validation on the training data is \$34,020. This means that the model is within about \$70,000 95% of the time. Given that the mean sale price for a house in Ames during the time period covered by our dataset is \$180,000, the RMSE implies that the predicted price is within 38% of the actual price 95% of the time. This is not great, but it is a good starting point.
+The interpretable linear regression does moderately well. Its RMSE from 10-fold cross validation on the training data is \$30,340. This means that the model is within about \$60,000 95% of the time. Given that the mean sale price for a house in Ames during the time period covered by our dataset is \$180,000, the RMSE implies that the predicted price is within 33% of the actual price 95% of the time. This is not great, but it is a good starting point.
 
 The benefit of this type of model is its interpretability. To demonstrate this, we will interpret one numerical coefficient and one categorical coefficient.
 
@@ -657,7 +662,7 @@ formula <- as.formula(paste("log_sale_price ~", terms, "- neighborhood_veenker")
 # Complex LR with stepwise selection
 
 # Check if the model object exists, train if it doesn't
-if (file.exists("Models/lm_complexZZ.rds")) {
+if (file.exists("Models/lm_complex.rds")) {
   # Load the model object from disk
   lmComp <- readRDS("Models/lm_complex.rds")
 } else {
@@ -704,7 +709,7 @@ stepwise_pred <- predict(lmComp, newdata = as.matrix(new_test))
 # Save predictions
 data.frame(id = id_col, SalePrice = exp(stepwise_pred)) %>%
   dplyr::select(id, SalePrice) %>%
-  write_csv("Predictions/complexlm_predictions1.csv")
+  write_csv("Predictions/complexlm_predictions.csv")
 
 # stepwise_pred %>%
 #   data.frame() %>%
