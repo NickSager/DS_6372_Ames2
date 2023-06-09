@@ -719,7 +719,7 @@ data.frame(id = id_col, SalePrice = exp(stepwise_pred)) %>%
 #   write_csv("Predictions/complexlm_predictions.csv")
 ```
 
-The linear regression model with transformations does better than the interpretable model. The RMSE is 0.0152 on the log scale which translates to roughly a 16% multipliciative change on the original scale. Interpreting this is difficult due to the complexity of the model, but this approximately corresponds to a \$27,000 error in the predicted sale price. This is a significant improvement over the \$30,000 error from the interpretable model. 
+The linear regression model with transformations does better than the interpretable model. The RMSE is 0.0152 on the log scale which translates to roughly a 16% multiplicative change on the original scale. Interpreting this is difficult due to the complexity of the model, but this approximately corresponds to a \$27,000 error in the predicted sale price. This is a significant improvement over the \$30,000 error from the interpretable model. 
 
 From the coefficients, we can see that the penalized regression included most of the coefficients from the previous model. Total basement area and garage are ended up being excluded, as well as Neghborhoods blmngtn and blueste.
 
