@@ -751,6 +751,56 @@ The residuals for this model don't show any evidence of non-linearity or non-con
 
 ```{r}
 # Non-Parametric model
+library(randomForest)
+library(ggplot2)
+set.seed(1234)
+
+predictor_vars <- c(
+  "log_gr_liv_area", "log_lot_area", "overall_qual_2", "year_built", "year_remod_add",
+  "log_total_bsmt_sf", "log_garage_area", "lot_config_fr2", "house_style1story", "exter_qual_gd",
+  "fireplace_qu_none", "sale_type_con"#, ". -sale_price" #Can include "." to make really complex
+) %>% paste(collapse = " * ")
+neighborhood_vars <- grep("neighborhood", colnames(train), value = TRUE) %>% paste(collapse = " + ")
+terms <- (paste(predictor_vars, neighborhood_vars, sep = " * "))
+formula <- as.formula(paste("log_sale_price ~", terms, "- neighborhood_veenker"))
+library(dplyr)
+
+#removing rows with infinity in one of the values
+
+df <- train[!is.infinite(rowSums(train)),]
+
+rf.fit <- randomForest(formula, data = df,ntree=500)
+
+
+#prediction on test case
+df_test <- test[,!is.na(colSums(test))]
+df_test <- df_test[!is.infinite(rowSums(df_test)),]
+
+
+df_test['sale_price'] <- predict(rf.fit, newdata= df_test)
+
+print(rf.fit)
+
+plot(rf.fit)
+
+## Visualize variable importance ----------------------------------------------
+
+# Get variable importance from the model fit
+ImpData <- as.data.frame(importance(rf.fit))
+ImpData$Var.Names <- row.names(ImpData)
+
+ggplot(ImpData, aes(x=Var.Names, y=`IncNodePurity`)) +
+  geom_segment( aes(x=Var.Names, xend=Var.Names, y=0, yend=`IncNodePurity`), color="skyblue") +
+  geom_point(aes(size = IncNodePurity), color="blue", alpha=0.6) +
+  theme_light() +
+  coord_flip() +
+  theme(
+    legend.position="bottom",
+    panel.grid.major.y = element_blank(),
+    panel.border = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+
 
 ```
 
