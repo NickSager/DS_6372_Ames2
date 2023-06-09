@@ -213,6 +213,16 @@ For variables that followed a MCAR (Missing Completely at Random) pattern and ha
 
 The datasets after imputation and processing were split back to 'test' and 'train'.
 
+Influential points in training data:
+```{r Influential Points}
+train[524, ] %>% select(sale_price, gr_liv_area)
+train[1299, ] %>% select(sale_price, gr_liv_area)
+
+# Remove the two outliers
+train <- train[-c(524, 1299), ]
+```
+Observations 524 and 1299 were identified as outliers based on their GrLivArea and SalePrice values. These observations were removed from the training dataset due to their very atypical values. We will assume that there is some other reason for these values which isn't accounted for in the data.
+
 ## Exploratory Data Analysis
 
 Moving forward, we will delve into an exploration of the Ames housing market data, aiming to extract valuable insights. By closely examining the dataset, we aim to uncover key patterns, trends, and relationships that will assist us to robust models.
@@ -550,12 +560,6 @@ Based on the exploratory analysis above, we will include the following variables
 
 ```{r}
 # Train a linear regression model with caret using CV
-train <- ames %>%
-  filter(train == 1) %>%
-  select(-train)
-
-
-
 
 predictor_vars <- c(
   "gr_liv_area", "lot_area", "overall_qual", "year_built", "year_remod_add",
@@ -640,14 +644,6 @@ EDA For interactions?: Running interaction model in the background. Will include
 
 Complex LR with feature selection:
 ```{r}
-# Set up training data - move to top
-train <- ames %>%
-  filter(train == 1) %>%
-  select(-train)
-test <- ames %>%
-  filter(train == 0) %>%
-  select(-train)
-
 # Define variables to be used and create formula
 predictor_vars <- c(
   "log_gr_liv_area", "log_lot_area", "overall_qual_2", "year_built", "year_remod_add",
@@ -661,12 +657,10 @@ formula <- as.formula(paste("log_sale_price ~", terms, "- neighborhood_veenker")
 # Complex LR with stepwise selection
 
 # Check if the model object exists, train if it doesn't
-if (file.exists("Models/lm_complexY.rds")) {
+if (file.exists("Models/lm_complexZZ.rds")) {
   # Load the model object from disk
   lmComp <- readRDS("Models/lm_complex.rds")
 } else {
-  # Perform stepwise selection
-
   # Set up a parallel backend with the number of cores you want to use
   cores <- 8 # Change this to the number of cores you want to use
   cl <- makePSOCKcluster(cores)
@@ -729,8 +723,26 @@ Because we are still using a linear regression model, we must check the assumpti
 ```{r}
 # Plot the residuals of lmComp
 
+# Choose a lambda value
+lambda <- lmComp$bestTune$lambda
 
+# Get predictions for this lambda
+predictions <- predict(lmComp$finalModel, newx = as.matrix(train[, c(var_names)]), s = lambda)
+
+# Calculate residuals
+residuals <- train$log_sale_price - predictions
+
+# Plot residuals
+ggplot() +
+  geom_point(aes(x = predictions, y = residuals)) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  labs(x = "Fitted values", y = "Residuals", title = "Residuals vs Fitted values")
+
+## Q-Q plot
+qqnorm(residuals)
 ```
+
+The residuals for this model don't show any evidence of non-linearity or non-constant variance (heteroscedasticity). There is no evidence of non-normality. There are two influential points that could be addressed if there was more time. Because of the transformations, the more complex linear model better meets the assumptions of linear regression than the interpretable model.
 
 ```{r}
 # Non-Parametric model
