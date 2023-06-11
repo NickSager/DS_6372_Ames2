@@ -28,6 +28,8 @@ library(doParallel)
 
 In the dynamic field of data science, modeling serves as a vital tool for comprehending and predicting intricate relationships among variables. In this project, we will undertake a comprehensive exploration encompassing data processing, exploratory data analysis, and model construction. Our primary objective is to construct robust and reliable models that offer valuable insights and demonstrate accurate predictive capabilities. The initial model will prioritize interpretability, enabling us to extract meaningful explanations. Subsequently, we will develop two additional models that emphasize accurate predictions.
 
+The video presentation for this project can be found at: <https://youtu.be/_Rdo4PIEZZI>
+
 ## Data Description
 
 Kaggle is used by data scientists and machine learning engineers to discover data, build models, and compete in challenges. One of the most popular competitions in Kaggle is 'House Prices - Advanced Regression Techniques'. As of 6/6/2023, this competition has close to 28K entries.
